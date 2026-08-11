@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 运行产物 (游戏项目目录下生成, 不应入库)
+save/
+logs/
+
+# 测试临时产物
+tests/save/
+tests/logs/
+tests/_*.gal
+
+# 构建
+build/
+dist/
+release/
