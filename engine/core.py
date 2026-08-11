@@ -957,12 +957,14 @@ class GameEngine:
                     0.0, float(cfg["music_fade"]))
             except (TypeError, ValueError):
                 pass
-        # 存档槽位数量 (window 块 save_slots)
+        # 存档槽位数量 (window 块 save_slots; 仅正整数生效, 非法值保持默认)
         if "save_slots" in cfg:
             try:
-                self.save.slot_count = max(1, int(float(cfg["save_slots"])))
+                n = int(float(cfg["save_slots"]))
             except (TypeError, ValueError):
-                pass
+                n = 0
+            if n >= 1:
+                self.save.slot_count = n
         # ESC 菜单文案
         for key in self.menu_texts:
             if f"menu_{key}" in cfg:
