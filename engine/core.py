@@ -957,6 +957,12 @@ class GameEngine:
                     0.0, float(cfg["music_fade"]))
             except (TypeError, ValueError):
                 pass
+        # 存档槽位数量 (window 块 save_slots)
+        if "save_slots" in cfg:
+            try:
+                self.save.slot_count = max(1, int(float(cfg["save_slots"])))
+            except (TypeError, ValueError):
+                pass
         # ESC 菜单文案
         for key in self.menu_texts:
             if f"menu_{key}" in cfg:
@@ -1061,7 +1067,6 @@ class GameEngine:
         mode = params.get("mode", "load")
         self.display.show_slot_menu(self.save.list_slots(), mode)
         return False    # 槽位界面浮在选择列表之上
-
     def _act_save(self, engine, params, source):
         try:
             slot = int(params.get("slot", 0))

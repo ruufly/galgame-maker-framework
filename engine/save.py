@@ -16,6 +16,7 @@ class SaveManager:
 
     def __init__(self, engine) -> None:
         self.engine = engine
+        self.slot_count = 6        # 槽位数量 (window 块 save_slots 可配置)
 
     def _path(self, slot: int) -> str:
         d = os.path.join(self.engine.project_dir, "save")
@@ -124,12 +125,15 @@ class SaveManager:
         path = self._path(slot)
         return self._read_json(path)
 
-    def list_slots(self, count: int = 6) -> list:
+    def list_slots(self, count: int = None) -> list:
         """列出前 count 个槽位的信息, 供存档选择界面展示。
 
+        count 缺省用 self.slot_count (window 块 save_slots 配置)。
         每项: {"slot": 索引, "time": 存档时间, "label": 所在标签,
                "preview": 进度摘要, "empty": 是否空槽}
         """
+        if count is None:
+            count = self.slot_count
         out = []
         for slot in range(count):
             data = self._read_raw(slot)

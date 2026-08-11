@@ -1153,6 +1153,17 @@ def test_system_menu():
         check("保存到槽位 3", not d.slot_menu_active and not engine.paused)
         check("槽位文件存在", engine.save._read_raw(2) is not None)
 
+        # save_slots 可配置 (window 块 save_slots 官方能力)
+        engine.apply_config({"save_slots": 3})
+        check("save_slots 生效", engine.save.slot_count == 3)
+        engine.on_escape()                          # 打开系统菜单
+        engine.on_click(d.system_menu_rects[1].center)   # 存档
+        check("槽位界面按配置数量", len(d.slot_menu_slots) == 3,
+              str(len(d.slot_menu_slots)))
+        engine.on_click(d.slot_menu_back_rect.center)    # 返回系统菜单
+        engine.on_escape()                          # 关闭系统菜单
+        engine.apply_config({"save_slots": 6})      # 恢复默认
+
         # ESC -> 读档 -> 槽位界面 -> 返回
         engine.on_escape()
         engine.on_click(d.system_menu_rects[2].center)   # 读取存档

@@ -474,6 +474,7 @@ window
     key_right: "right, d"          # 确认框: 右移活动项
     ui_click_sound: "sfx_click"    # 全局 UI 点击音
     music_fade: 1.0                # BGM 淡入淡出默认时长 (秒)
+    save_slots: 6                  # 存档槽位数量 (默认 6, 可配置)
     menu_continue: "继续游戏"      # ESC 菜单文案 (可自定义)
     menu_save: "存档" / menu_load: "读取存档" / menu_title: "返回标题"
     menu_quit: "退出游戏"
@@ -1001,7 +1002,8 @@ using shake custom_actions  # 一次导入多个
 
 ## 7. 存档系统
 
-* 槽位: 6 个 (save/slot0-5.json), 由 ESC 菜单或标题"读取存档"打开
+* 槽位: 默认 6 个 (save/slot0-5.json), **数量可由 window 块 `save_slots`
+  配置** (如 `save_slots: 12`); 由 ESC 菜单或标题"读取存档"打开
 * 存档内容: 变量 / 剧情位置 (标签+语句索引) / 调用栈 / 阻塞状态 /
   背景 (场景 id + 背景名) / 立绘 (id/立绘名/透明度/旋转/翻转/中心点) /
   BGM 注册名 / 当前样式名 / 文本与选择支状态
@@ -1345,7 +1347,6 @@ py -3.10 framework/tests/smoke.py
 * `weight` 语法可解析但已不承担背景职责 (统一走 scene/bg)
 * 音频/图片缺失仅告警不中断
 * `sleep` 阻塞中读档不恢复剩余等待时间
-* 存档槽位固定 6 个
 ---
 
 ## 15. 变更日志 (开发时间线)
@@ -1404,6 +1405,7 @@ py -3.10 framework/tests/smoke.py
 | 47. 文件编解码钩子 | engine.register_file_codec(scope, decode, encode) 统一文件加密扩展点: save (存档 JSON) / resource (图片/音频/字体, pygame file-like 加载解密结果) / lang (语言文件) / script (.gal, 引擎构造时绑定解析器模块级解码器) / plugin (插件源码, 解密后经 importlib 加载并清理临时文件) + 未注册 scope 完全原样 + 异常回退原数据 + 密钥可运行时从服务器获取 (插件 on_load 缓存, 无需动内核) + 测试保持 779 项全绿 |
 | 48. 每帧钩子 | engine.register_frame_hook(fn) 主循环每帧无条件调用 (暂停菜单时也执行, 异常隔离), 为 Steam 回调 (RunCallbacks)/网络轮询/心跳提供语义化挂载点 (替代 draw_overlay 兼职) + 测试保持 779 项全绿 |
 | 49. 叙事扩展点 | engine.register_text_char_hook (文本输出钩子: 按逻辑字符增量触发, 打字音效/字幕高亮; instant/跳过一次大增量) + choice_prepare 事件 (选择支显示前广播, 插件可原地改写选项, 直播互动/动态选项) + engine.snapshot_state/restore_state (内存状态快照, 与存档同构, 撤销/回滚/分支探索, 静默不落盘) + 测试保持 779 项全绿 |
+| 50. 槽位可配置 | window 块 save_slots 配置存档槽位数量 (默认 6; save.slot_count + list_slots 缺省跟随, 槽位界面按配置数量显示) + 移除"槽位固定 6 个"限制 + 测试增至 781 项全绿 |
 
 ---
 

@@ -91,7 +91,7 @@ engine.keybinds.register("my_toggle", "调试模式", callback,
 
 ## 存档系统
 
-* 槽位 6 个（`save/slot0-5.json`），由 ESC 菜单/标题打开
+* 槽位默认 6 个（`save/slot0-5.json`），**数量由 `window` 块 `save_slots` 配置**（如 `save_slots: 12`），槽位界面按配置数量显示
 * 内容：变量/剧情位置/调用栈/阻塞状态/背景(场景id+背景名)/立绘(id/pose/透明度/旋转/翻转/中心点)/BGM注册名/样式名/文本与选择支
 * 对象以**脚本 id** 存储（不存图片路径，重命名图片不破坏旧档）
 * 元数据 API：`save.set_meta/get_meta/meta_path`、`list_slots`（含 time/label/preview/screenshot）

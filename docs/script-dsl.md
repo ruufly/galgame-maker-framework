@@ -216,6 +216,7 @@ window
     confirm_load / confirm_title    # 读档/回标题确认框
     key_up / key_down / key_confirm / key_left / key_right
     ui_click_sound: "sfx_click" / music_fade: 1.0
+    save_slots: 6                  # 存档槽位数量 (默认 6, 可配置)
     menu_continue / menu_save / menu_load / menu_title / menu_quit
     font: "fonts/Ubuntu-R.ttf"     # 或 "sys:Microsoft YaHei"
 ```
