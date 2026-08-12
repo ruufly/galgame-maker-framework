@@ -481,6 +481,7 @@ DEFAULT_STYLE = {
     "speaker_color": (255, 210, 130),
     "speaker_bg": (120, 40, 40, 220),
     "arrow_color": (255, 255, 255),
+    "font": None,                  # 字体族名 (register_font 注册; None=默认字体)
     "textbox_image": None,       # 文本框背景图 (9-slice), 优先于纯色
     "speaker_image": None,       # 角色名框背景图
     "choice_bg": (40, 40, 48, 220),
@@ -697,6 +698,7 @@ class Display:
         self._font_choice = engine.get_font(28)
         self._font_notice = engine.get_font(20)
         self._font_end = engine.get_font(32)
+        self._rich.family = "default"
 
         # 当前界面样式 (由 use style 指令切换)
         self.style = dict(DEFAULT_STYLE)
@@ -704,20 +706,34 @@ class Display:
     # ==================================================================
     # 样式
     # ==================================================================
+    def _style_font_family(self) -> str:
+        """当前样式的字体族 (style font 键; None 用默认字体)。"""
+        return self.style.get("font") or "default"
+
     def apply_style(self, style_dict: dict) -> None:
         """应用样式 (只覆盖提供的键, 其余保持默认/当前值)。"""
         for key, value in style_dict.items():
             if key in DEFAULT_STYLE:
                 self.style[key] = value
-        # 正文字号变化时重建字体引用
-        self._font_size = self.style["text_size"]
-        self._font_text = self.engine.get_font(self._font_size)
+        self._sync_fonts()
 
     def reset_style(self) -> None:
         """恢复默认样式。"""
         self.style = dict(DEFAULT_STYLE)
+        self._sync_fonts()
+
+    def _sync_fonts(self) -> None:
+        """样式字体族/字号变化后重建字体引用与富文本渲染字体。"""
+        fam = self._style_font_family()
         self._font_size = self.style["text_size"]
-        self._font_text = self.engine.get_font(self._font_size)
+        self._font_title = self.engine.get_font(48, family=fam)
+        self._font_text = self.engine.get_font(self._font_size, family=fam)
+        self._font_speaker = self.engine.get_font(22, family=fam)
+        self._font_choice = self.engine.get_font(28, family=fam)
+        self._font_notice = self.engine.get_font(20, family=fam)
+        self._font_end = self.engine.get_font(32, family=fam)
+        self._rich.family = fam
+        self._rich._char_cache.clear()
 
     # ==================================================================
     # UI 图片 (9-slice) 加载
@@ -1418,13 +1434,7 @@ class Display:
 
     def refresh_fonts(self) -> None:
         """字体切换后重建渲染字体实例 (engine.apply_font 调用)。"""
-        self._font_title = self.engine.get_font(48)
-        self._font_text = self.engine.get_font(self._font_size)
-        self._font_speaker = self.engine.get_font(22)
-        self._font_choice = self.engine.get_font(28)
-        self._font_notice = self.engine.get_font(20)
-        self._font_end = self.engine.get_font(32)
-        self._rich._char_cache.clear()    # 字符缓存按字体渲染, 一并失效
+        self._sync_fonts()
 
     def refresh_selection_items(self, items) -> None:
         """语言切换后刷新正在显示的菜单按钮 (保留布局/标题图)。"""
@@ -1874,38 +1884,71 @@ class Display:
                              else "text_color"],
                     center=rect.center)
 
+    # 每页槽位数 (超过则分页, 底部翻页按钮)
+    SLOT_PAGE_SIZE = 6
+
     def show_slot_menu(self, slots, mode: str = "load") -> None:
-        """显示存档槽位选择界面。slots: [{slot,time,label,preview,empty}]"""
+        """显示存档槽位选择界面。slots: [{slot,time,label,preview,empty}]
+
+        槽位数超过 SLOT_PAGE_SIZE 时自动分页 (底部 ◀ 页码 ▶ 翻页)。
+        """
         self.slot_menu_active = True
         self.slot_menu_mode = mode
         self.slot_menu_slots = list(slots)
+        self.slot_page = 0
+        self.slot_pages = max(1, (len(self.slot_menu_slots)
+                                  + self.SLOT_PAGE_SIZE - 1)
+                              // self.SLOT_PAGE_SIZE)
         w, h = self.width, self.height
-        cols = 2
-        rows = max(1, (len(slots) + 1) // 2)
         panel_w, panel_h = int(w * 0.72), int(h * 0.66)
         px, py = (w - panel_w) // 2, int(h * 0.16)
+        self.slot_menu_panel = (px, py, panel_w, panel_h)
+        self.slot_menu_back_rect = pygame.Rect(
+            px + panel_w - 110, py + panel_h - 44, 90, 34)
+        # 翻页按钮 (仅多页时启用)
+        self.slot_page_prev_rect = pygame.Rect(px + 30, py + panel_h - 44,
+                                               60, 34)
+        self.slot_page_next_rect = pygame.Rect(px + panel_w - 200,
+                                               py + panel_h - 44, 60, 34)
+        self._rebuild_slot_rects()
+
+    def _rebuild_slot_rects(self) -> None:
+        """按当前页重建槽位格子矩形 (页内索引 -> 全局索引偏移)。"""
+        px, py, panel_w, panel_h = self.slot_menu_panel
+        start = self.slot_page * self.SLOT_PAGE_SIZE
+        count = min(self.SLOT_PAGE_SIZE,
+                    len(self.slot_menu_slots) - start)
+        cols = 2
+        rows = max(1, (count + 1) // 2)
         gw, gh = int(panel_w * 0.42), int((panel_h - 80) / rows)
         gap_x, gap_y = int(panel_w * 0.08), 10
         x0 = px + int(panel_w * 0.045)
         y0 = py + 46
         self.slot_menu_rects = []
-        for i in range(len(slots)):
+        for i in range(count):
             r, c = divmod(i, cols)
             self.slot_menu_rects.append(
                 pygame.Rect(x0 + c * (gw + gap_x), y0 + r * (gh + gap_y),
                             gw, gh))
-        self.slot_menu_back_rect = pygame.Rect(
-            px + panel_w - 110, py + panel_h - 44, 90, 34)
+
+    def slot_page_start(self) -> int:
+        """当前页第一个槽位的全局索引。"""
+        return self.slot_page * self.SLOT_PAGE_SIZE
 
     def hit_slot_menu(self, pos):
-        """返回槽位索引 / "back" / None。"""
+        """返回全局槽位索引 / "back" / "prev" / "next" / None。"""
         if not self.slot_menu_active:
             return None
         if self.slot_menu_back_rect.collidepoint(pos):
             return "back"
+        if self.slot_pages > 1:
+            if self.slot_page_prev_rect.collidepoint(pos):
+                return "prev"
+            if self.slot_page_next_rect.collidepoint(pos):
+                return "next"
         for idx, rect in enumerate(self.slot_menu_rects):
             if rect.collidepoint(pos):
-                return idx
+                return self.slot_page_start() + idx
         return None
 
     def _draw_slot_menu(self, buf) -> None:
@@ -1924,9 +1967,12 @@ class Display:
                  else self.engine.i18n.t("slot.load_title"))
         runs_t = self._rich.parse(title, base_size=30)
         self._rich.draw_centered(buf, runs_t, w // 2, py + 22)
-        # 槽位格子
+        # 槽位格子 (仅当前页)
         mouse = self.mouse_pos()
-        for idx, info in enumerate(self.slot_menu_slots):
+        start = self.slot_page_start()
+        for idx, info in enumerate(
+                self.slot_menu_slots[start:start + self.SLOT_PAGE_SIZE]):
+            gidx = start + idx
             rect = self.slot_menu_rects[idx]
             hovered = rect.collidepoint(mouse)
             empty = info.get("empty")
@@ -1946,7 +1992,7 @@ class Display:
             thumb = None
             if self._slot_thumb_provider is not None:
                 try:
-                    thumb = self._slot_thumb_provider(idx, info)
+                    thumb = self._slot_thumb_provider(gidx, info)
                 except Exception:
                     thumb = None
             if thumb is not None:
@@ -1986,6 +2032,31 @@ class Display:
         runs_b = self._rich.parse(
             self.engine.i18n.t("slot.back"), base_size=20)
         self._rich.draw_centered(buf, runs_b, back.centerx, back.centery)
+        # 翻页行 (多页时: ◀ 页码 ▶)
+        if self.slot_pages > 1:
+            mouse2 = mouse
+            for rct, tag in ((self.slot_page_prev_rect, "prev"),
+                             (self.slot_page_next_rect, "next")):
+                hover = rct.collidepoint(mouse2)
+                img = self._theme("menu_button", "focus" if hover
+                                  else "default")
+                self._panel_or_image(
+                    buf, rct, img,
+                    bg_color=(60, 55, 80, 235) if hover
+                    else (45, 45, 66, 220),
+                    border_color=(255, 210, 130) if hover
+                    else (100, 100, 130),
+                    border_width=2, radius=8)
+            f = self.engine.get_font(22, family=self._style_font_family())
+            for rct, ch in ((self.slot_page_prev_rect, "<"),
+                            (self.slot_page_next_rect, ">")):
+                buf.blit(f.render(ch, True, (235, 235, 240)),
+                         f.render(ch, True, (235, 235, 240))
+                         .get_rect(center=rct.center))
+            runs_p = self._rich.parse(
+                f"{self.slot_page + 1}/{self.slot_pages}", base_size=18)
+            self._rich.draw_centered(buf, runs_p, w // 2,
+                                     py + panel_h - 27)
 
     def show_confirm(self, text: str, yes_text: str = None,
                      no_text: str = None) -> None:
@@ -2097,7 +2168,8 @@ class Display:
         ui.dim_overlay(buf, 175)
         dlg_img = self._ui_image(
             self.selection_style_overrides.get("dialog_image"))
-        self._panel_or_image(buf, self.error_panel, dlg_img,
+        self._panel_or_image(buf, self.error_panel,
+                             self._theme("error_panel") or dlg_img,
                              bg_color=(40, 15, 15, 248),
                              border_color=(255, 90, 90),
                              border_width=3, radius=10)
@@ -2132,8 +2204,10 @@ class Display:
             rect = self.error_rects[idx]
             hovered = rect.collidepoint(mouse)
             accent = ((0, 150, 90), (120, 110, 40), (170, 50, 50))[idx]
+            err_img = self._theme("error_button", "focus" if hovered
+                                  else "default")
             self._panel_or_image(
-                buf, rect, None,
+                buf, rect, err_img,
                 bg_color=(*accent, 250) if hovered else (*accent, 205),
                 border_color=(255, 255, 255, 200) if hovered
                 else (0, 0, 0, 120), border_width=2, radius=6)
@@ -2485,11 +2559,15 @@ class Display:
     def _draw_notice(self, buf) -> None:
         surf = self._font_notice.render(self.notice, True, (255, 255, 255))
         rect = pygame.Rect(0, 0, surf.get_width() + 40, surf.get_height() + 16)
+        notice_img = self._theme("notice_panel")
         if self.notice_pos == "top-left":
             rect.topleft = (12, 12)
         elif self.notice_pos == "top-right":
             rect.topright = (self.width - 12, 12)
         else:
             rect.center = (self.width / 2, 48)
-        ui.panel(buf, rect, bg_color=(20, 20, 20, 210))
+        if notice_img is not None:
+            buf.blit(ui.nine_slice(notice_img, rect), rect.topleft)
+        else:
+            ui.panel(buf, rect, bg_color=(20, 20, 20, 210))
         ui.text(buf, self._font_notice, self.notice, center=rect.center)

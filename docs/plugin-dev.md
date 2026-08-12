@@ -158,6 +158,14 @@ engine.register_frame_hook(fn)      # fn(dt: float)
 display.register_text_char_hook(fn) # fn(display, start_idx, count)
 ```
 
+### 字体
+
+```python
+engine.register_font("ui", "fonts/UI.ttf")     # 或 "sys:Microsoft YaHei"
+engine.get_font(20, family="ui")               # 取用 (缓存按 family)
+# 富文本/名字框/选择支/标题跟随当前 style 的 font 族
+```
+
 ### 状态快照 / 回滚
 
 ```python

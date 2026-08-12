@@ -63,6 +63,9 @@ class GalleryPlugin(Plugin):
         self._cfg = dict(self.engine.gallery_config)
         self._active = False          # 鉴赏界面是否打开
         self._category = "cg"         # 当前分类
+        self._page = 0                # 当前分页 (内容网格)
+        self._pages = 1               # 当前分类总页数
+        self._page_rects = []         # 翻页按钮 [(tag, rect)] tag=prev/next
         self._view = None             # CG 大图: {"scene","pose","path"}
         self._img_cache = {}
         self._btn_registered = False
@@ -229,6 +232,7 @@ class GalleryPlugin(Plugin):
         self._active = True
         self._category = "cg"
         self._view = None
+        self._page = 0
         self.engine.emit("gallery_open")
         return True
 
@@ -245,7 +249,30 @@ class GalleryPlugin(Plugin):
     # ------------------------------------------------------------------
     # 交互
     # ------------------------------------------------------------------
+    def _page_size(self) -> int:
+        """每页网格条目数 (按分类)。"""
+        return {"cg": 8, "bgm": 8, "character": 6, "scene": 8}.get(
+            self._category, 8)
+
+    def _slice_page(self, items):
+        """按当前页切分列表; 页码越界自动收敛。"""
+        ps = self._page_size()
+        total = len(items)
+        self._pages = max(1, (total + ps - 1) // ps)
+        if self._page >= self._pages:
+            self._page = max(0, self._pages - 1)
+        start = self._page * ps
+        return items[start:start + ps]
+
     def _handle_click(self, pos):
+        # 翻页按钮
+        for tag, rect in self._page_rects:
+            if rect.collidepoint(pos):
+                n = self._pages
+                self._page = (self._page - 1) % n if tag == "prev" \
+                    else (self._page + 1) % n
+                self._grid_rects = []
+                return False
         # 分类按钮 / 返回
         for i, rect in enumerate(self._cat_rects):
             if rect.collidepoint(pos):
@@ -254,6 +281,7 @@ class GalleryPlugin(Plugin):
                     self.close_gallery()
                 elif name in ("cg", "bgm", "character", "scene"):
                     self._category = name
+                    self._page = 0
                     self._grid_rects = []
                 return False
         # 内容区
@@ -426,6 +454,44 @@ class GalleryPlugin(Plugin):
             self._draw_characters(surface)
         elif self._category == "scene":
             self._draw_scenes(surface)
+        # 翻页行 (多页时 ◀ 页码 ▶; _pages 由 _slice_page 计算)
+        self._build_page_layout(surface, w)
+
+    def _build_page_layout(self, surface, w) -> None:
+        """构建并绘制底部翻页按钮 (分类行下方)。"""
+        self._page_rects = []
+        if self._pages <= 1:
+            self._page = 0
+            return
+        ui = self.engine.ui
+        font = self.engine.get_font(18)
+        bw, bh, gap = 60, 34, 16
+        y = 118
+        lx = (w - (bw * 2 + gap + 90)) // 2
+        self._page_rects = [("prev", pygame.Rect(lx, y, bw, bh)),
+                            ("next", pygame.Rect(lx + bw + gap + 90, y,
+                                                 bw, bh))]
+        mouse = self.engine.display.mouse_pos()
+        for tag, rct in self._page_rects:
+            hover = rct.collidepoint(mouse)
+            d, f = self._theme_img("page_image")
+            im = f if hover else d
+            if im is not None:
+                surface.blit(ui.nine_slice(im, rct), rct.topleft)
+            else:
+                ui.panel(surface, rct,
+                         bg_color=(60, 55, 80, 235) if hover
+                         else (45, 45, 66, 220),
+                         border_color=(255, 210, 130) if hover
+                         else (100, 100, 130),
+                         border_width=2, radius=8)
+            ui.text(surface, font, "<" if tag == "prev" else ">",
+                    color=(235, 235, 240), center=rct.center)
+        # 页码
+        font_p = self.engine.get_font(16)
+        ui.text(surface, font_p, f"{self._page + 1}/{self._pages}",
+                color=(200, 200, 215),
+                center=(w // 2, y + bh // 2))
 
     def _build_cat_layout(self, w):
         cats = self._categories() + ["back"]
@@ -448,8 +514,9 @@ class GalleryPlugin(Plugin):
         ui = self.engine.ui
         w, h = surface.get_size()
         rt = self.engine.runtime
-        entries = self._cg_entries()
-        collected = sum(1 for _s, poses, _t, _th in entries if poses)
+        entries_all = self._cg_entries()
+        entries = self._slice_page(entries_all)
+        collected = sum(1 for _s, poses, _t, _th in entries_all if poses)
         ui.text(surface, self.engine.get_font(20),
                 self.engine.i18n.t("gallery.cg_collected", ns="plugin",
                                    default="CG 收集: {collected} / {total}",
@@ -464,6 +531,7 @@ class GalleryPlugin(Plugin):
                                        default="暂无 CG 可鉴赏"),
                     color=(150, 150, 165),
                     center=(w // 2, h // 2))
+            self._page_rects = []
             return
         cols = 4
         gap = 16
@@ -516,14 +584,16 @@ class GalleryPlugin(Plugin):
     def _draw_bgm(self, surface):
         ui = self.engine.ui
         w, h = surface.get_size()
-        songs = self._bgm_entries()
+        songs_all = self._bgm_entries()
+        songs = self._slice_page(songs_all)
         self._grid_rects = []
         self._grid_items = []
-        if not songs:
+        if not songs_all:
             ui.text(surface, self.engine.get_font(20),
                     self.engine.i18n.t("gallery.empty_bgm", ns="plugin",
                                        default="暂无 BGM 可鉴赏"),
                     color=(150, 150, 165), center=(w // 2, h // 2))
+            self._page_rects = []
             return
         font = self.engine.get_font(20)
         font_f = self.engine.get_font(15)
@@ -572,14 +642,16 @@ class GalleryPlugin(Plugin):
     def _draw_characters(self, surface):
         ui = self.engine.ui
         w, h = surface.get_size()
-        chars = list(self.engine.runtime.characters.values())
+        chars_all = list(self.engine.runtime.characters.values())
+        chars = self._slice_page(chars_all)
         self._grid_rects = []
         self._grid_items = []
-        if not chars:
+        if not chars_all:
             ui.text(surface, self.engine.get_font(20),
                     self.engine.i18n.t("gallery.empty_character", ns="plugin",
                                        default="暂无角色"),
                     color=(150, 150, 165), center=(w // 2, h // 2))
+            self._page_rects = []
             return
         cols = 3
         gap = 28
@@ -615,15 +687,17 @@ class GalleryPlugin(Plugin):
         ui = self.engine.ui
         w, h = surface.get_size()
         # 场景鉴赏只展示 normal 场景 (CG 场景归 CG 鉴赏)
-        scenes = [sc for sc in self.engine.runtime.scenes.values()
-                  if sc.get("type") != "cg"]
+        scenes_all = [sc for sc in self.engine.runtime.scenes.values()
+                      if sc.get("type") != "cg"]
+        scenes = self._slice_page(scenes_all)
         self._grid_rects = []
         self._grid_items = []
-        if not scenes:
+        if not scenes_all:
             ui.text(surface, self.engine.get_font(20),
                     self.engine.i18n.t("gallery.empty_scene", ns="plugin",
                                        default="暂无场景"),
                     color=(150, 150, 165), center=(w // 2, h // 2))
+            self._page_rects = []
             return
         cols = 4
         gap = 16

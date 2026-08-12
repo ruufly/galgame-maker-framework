@@ -113,6 +113,7 @@ class Runtime:
             "using": self._cmd_using,
             "plugin": self._cmd_plugin,
             "python": self._cmd_python,
+            "font": self._cmd_font,
         }
 
     # ==================================================================
@@ -299,7 +300,7 @@ class Runtime:
     _SEL_STYLE_BOOL_KEYS = {"button_stretch", "button_text"}
     _SEL_STYLE_STR_KEYS = {"anchor_x", "caption_x", "anchor_y",
                            "button_image", "button_image_hover",
-                           "dialog_image"}
+                           "dialog_image", "font"}
 
     # menu_bar 常驻菜单栏样式键
     _MENU_BAR_COLOR_KEYS = {"bg", "border", "button_bg", "button_bg_hover",
@@ -1991,6 +1992,17 @@ class Runtime:
         return None
 
     def _cmd_pass(self, stmt):
+        return None
+
+    def _cmd_font(self, stmt):
+        """注册命名字体: font <name> <spec>
+
+        spec: 相对脚本目录的字体文件路径 或 "sys:<系统字体名>"。
+        之后可在 style 块用 ``font: <name>`` 引用, 或引擎 API
+        get_font(size, family=<name>) 直接取用。
+        """
+        if len(stmt.args) >= 2:
+            self.engine.register_font(stmt.args[0], stmt.args[1])
         return None
 
     def _cmd_python(self, stmt):

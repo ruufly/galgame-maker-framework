@@ -66,6 +66,7 @@ class GameEngine:
         self._font_cache = {}
         self._font_path = self._find_font()
         self._font_sys = None      # "sys:<系统字体名>" (window font 配置)
+        self.fonts = {}            # 命名多字体: name -> spec (路径 或 "sys:名")
         if self._font_path:
             log.i("log.core.font_used", path=self._font_path)
 
@@ -221,21 +222,41 @@ class GameEngine:
         key = (family, size, bold, italic)
         if key in self._font_cache:
             return self._font_cache[key]
+        # 命名字体族: family 查 fonts 表 (文件路径 或 "sys:名"); 未注册回退默认
+        fspec = self.fonts.get(family)
+        if family == "default":
+            fspec = None
         font = None
-        if self._font_sys:
-            try:
-                font = pygame.font.SysFont(self._font_sys, size)
-            except Exception:
-                font = None
-        if font is None and self._font_path:
-            try:
-                # 字体文件走文件编解码钩子 "resource" (pygame 支持 file-like)
-                with open(self._font_path, "rb") as f:
-                    raw = f.read()
-                raw = self._codec_decode("resource", raw)
-                font = pygame.font.Font(io.BytesIO(raw), size)
-            except Exception:
-                font = None
+        if fspec:
+            if str(fspec).startswith("sys:"):
+                try:
+                    font = pygame.font.SysFont(str(fspec)[4:], size)
+                except Exception:
+                    font = None
+            else:
+                try:
+                    real = self.resolve_path(str(fspec))
+                    with open(real, "rb") as f:
+                        raw = f.read()
+                    raw = self._codec_decode("resource", raw)
+                    font = pygame.font.Font(io.BytesIO(raw), size)
+                except Exception:
+                    font = None
+        if font is None and not fspec:
+            if self._font_sys:
+                try:
+                    font = pygame.font.SysFont(self._font_sys, size)
+                except Exception:
+                    font = None
+            if font is None and self._font_path:
+                try:
+                    # 字体文件走文件编解码钩子 "resource" (pygame 支持 file-like)
+                    with open(self._font_path, "rb") as f:
+                        raw = f.read()
+                    raw = self._codec_decode("resource", raw)
+                    font = pygame.font.Font(io.BytesIO(raw), size)
+                except Exception:
+                    font = None
         if font is None:
             font = pygame.font.SysFont("microsoftyahei,simhei,arial", size)
         if bold:
@@ -244,6 +265,19 @@ class GameEngine:
             font.set_italic(True)
         self._font_cache[key] = font
         return font
+
+    def register_font(self, name: str, spec: str) -> None:
+        """插件/脚本 API: 注册命名字体 (供 get_font family 与 style font 引用)。
+
+        spec: 相对脚本目录的字体文件路径, 或 "sys:<系统字体名>"。
+        同名重复注册覆盖; 非法 spec 忽略。
+        """
+        name = str(name)
+        spec = str(spec)
+        if not name or not spec:
+            return
+        self.fonts[name] = spec
+        self._font_cache = {}      # 字体表变化, 缓存失效
 
     def apply_font(self, font: str) -> None:
         """切换渲染字体 (window 块 font: 配置; 立即生效)。
@@ -703,6 +737,14 @@ class GameEngine:
                 self._play_ui_sound()
             if hit == "back":
                 d.slot_menu_active = False   # 返回上一层 (菜单/标题)
+                return
+            if hit == "prev":                # 槽位翻页
+                d.slot_page = (d.slot_page - 1) % d.slot_pages
+                d._rebuild_slot_rects()
+                return
+            if hit == "next":
+                d.slot_page = (d.slot_page + 1) % d.slot_pages
+                d._rebuild_slot_rects()
                 return
             info = d.slot_menu_slots[hit]
             if d.slot_menu_mode == "save":

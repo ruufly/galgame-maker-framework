@@ -264,6 +264,7 @@ class MathRenderer:
     def __init__(self, engine=None):
         self.engine = engine
         self.available = False
+        self.family = "default"      # 当前渲染字体族 (display 按 style 设置)
         self._meta_parser = None
         self._cache = {}          # (expr, size, color) -> (surface, asc, desc)
         try:
@@ -387,7 +388,8 @@ class RichTextRenderer:
                tuple(run.outline) if run.outline else None, run.outline_width)
         if key in self._char_cache:
             return self._char_cache[key]
-        font = self.engine.get_font(run.size, bold=run.bold, italic=run.italic)
+        font = self.engine.get_font(run.size, family=self.family,
+                                    bold=run.bold, italic=run.italic)
         surf = render_with_outline(font, ch, run.color, run.outline,
                                    run.outline_width, run.underline)
         self._char_cache[key] = surf
@@ -439,8 +441,8 @@ class RichTextRenderer:
                     asc = max(asc, res[1])
                     desc = max(desc, res[2])
             else:
-                font = self.engine.get_font(run.size, bold=run.bold,
-                                            italic=run.italic)
+                font = self.engine.get_font(run.size, family=self.family,
+                                            bold=run.bold, italic=run.italic)
                 asc = max(asc, font.get_ascent())
                 desc = max(desc, font.get_descent())
         return asc, desc

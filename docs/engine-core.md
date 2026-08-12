@@ -91,7 +91,7 @@ engine.keybinds.register("my_toggle", "调试模式", callback,
 
 ## 存档系统
 
-* 槽位默认 6 个（`save/slot0-5.json`），**数量由 `window` 块 `save_slots` 配置**（如 `save_slots: 12`），槽位界面按配置数量显示
+* 槽位默认 6 个（`save/slot0-5.json`），**数量由 `window` 块 `save_slots` 配置**（如 `save_slots: 12`），槽位界面按配置数量显示；**超过 6 槽自动分页**（底部 ◀ 页码 ▶ 翻页，命中按全局槽位索引）
 * 内容：变量/剧情位置/调用栈/阻塞状态/背景(场景id+背景名)/立绘(id/pose/透明度/旋转/翻转/中心点)/BGM注册名/样式名/文本与选择支
 * 对象以**脚本 id** 存储（不存图片路径，重命名图片不破坏旧档）
 * 元数据 API：`save.set_meta/get_meta/meta_path`、`list_slots`（含 time/label/preview/screenshot）
@@ -104,6 +104,15 @@ engine.keybinds.register("my_toggle", "调试模式", callback,
 snap = engine.snapshot_state()   # 内存快照, 与存档同构, 不落盘
 engine.restore_state(snap)       # 静默恢复到快照点 (撤销/分支探索)
 ```
+
+## 多字体
+
+```python
+engine.register_font("ui", "fonts/UI.ttf")   # 或 "sys:Microsoft YaHei"
+engine.get_font(20, family="ui")              # 取用
+```
+脚本侧：`font <名> <spec>` 指令注册；`style` 块 `font: <名>` 让该样式
+的文本/名字框/选择支/标题/富文本使用该字体（切换样式即换字体）。
 
 ## 错误处理
 

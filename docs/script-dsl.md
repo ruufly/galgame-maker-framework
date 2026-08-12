@@ -172,7 +172,10 @@ menu_bar                          # bar 样式块
 use style modern        # 内置: modern / classic / dark / light / cyber
 use style default       # 恢复默认
 
+font ui "fonts/UI.ttf"  # 注册命名字体 (多字体; spec=文件 或 "sys:字体名")
+
 style my_theme
+    font: "ui"          # 样式字体族 (文本/名字框/选择支/标题/富文本跟随)
     textbox_bg / textbox_alpha / textbox_border / textbox_radius
     text_color / text_size / speaker_color / speaker_bg
     textbox_image / speaker_image / choice_image ...

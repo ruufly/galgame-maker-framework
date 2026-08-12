@@ -21,6 +21,7 @@ style my_theme
     speaker_color: "#ffd282"
     speaker_bg: "#1e3a5f"
     arrow_color: "#e94560"
+    font: "ui"                    # 字体族 (多字体; 缺省默认字体)
     textbox_image: "..."          # 背景图 (9-slice), 优先于纯色
     speaker_image: "..."
     choice_image: "..." / choice_image_hover: "..."
@@ -52,8 +53,11 @@ ui
     textbox: "materials/.../对话_adv对话框_llf.png"
     title_buttons: "默认.png, 焦点.png; 默认2.png, 焦点2.png"
     menu_buttons: "确认_按钮_默认_llf.png, 确认_按钮_焦点_llf.png"
-    confirm_panel / confirm_button / slot_frame / slot_panel
+    confirm_panel / confirm_button / slot_frame / slot_panel /
+    error_panel / error_button / notice_panel
 ```
+组件可运行时设置：`display.set_theme_image(comp, {"default": 路径, "focus": 路径})`
+（`ui` 块为同一机制）。
 
 style 图片键优先级更高；值为 `none` 禁用主题图。
 

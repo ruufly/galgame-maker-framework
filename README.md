@@ -411,6 +411,7 @@ style my_theme          # 自定义样式块 (同名可重载内置)
     speaker_color: "#ffd282"
     speaker_bg: "#1e3a5f"
     arrow_color: "#e94560"
+    font: "ui"                    # 字体族 (register_font/font 指令注册; 缺省默认字体)
     textbox_image: "..."          # 文本框背景图 (9-slice)
     speaker_image: "..."
     choice_image: "..." / choice_image_hover: "..."
@@ -432,7 +433,8 @@ ui                       # UI 主题素材 (九宫格切片, 相对路径)
     #   逗号 = 默认图,焦点图; 分号 = 多组按按钮索引取图
     #   单个路径 = 无状态图
     #   支持: textbox/choice_button/title_buttons/menu_button/
-    #         confirm_panel/confirm_button/slot_frame/slot_panel
+    #         confirm_panel/confirm_button/slot_frame/slot_panel/
+    #         error_panel/error_button/notice_panel
     #   style 图片键优先级更高, 值为 none 禁用主题图
 ```
 
@@ -872,6 +874,12 @@ gallery
 (`font: "fonts/Ubuntu-R.ttf"`) 或系统字体 (`font: "sys:Microsoft
 YaHei"`); 运行时 `engine.apply_font(font)` 立即生效。
 
+**多字体**: `font <名> <spec>` 指令或 `engine.register_font(name, spec)`
+注册命名字体 (spec = 文件路径 或 `sys:系统字体名`); `style` 块
+`font: <名>` 让该样式的文本/名字框/选择支/标题/富文本使用该字体
+(切换样式即换字体); 引擎 API `engine.get_font(size, family=<名>)`
+直接取用。
+
 **日志多语言**: `log.i / log.w / log.e(key, **fmt)` 按语言表翻译
 日志文案 (如 `log.i("log.script_loaded", path=...)`); **框架全部日志
 (引擎/解析/插件/启动器) 均已键化**, 核心语言表含 `log.*` key,
@@ -1004,6 +1012,8 @@ using shake custom_actions  # 一次导入多个
 
 * 槽位: 默认 6 个 (save/slot0-5.json), **数量可由 window 块 `save_slots`
   配置** (如 `save_slots: 12`); 由 ESC 菜单或标题"读取存档"打开
+* **自动分页**: 槽位数超过 6 时槽位界面自动分页 (底部 ◀ 页码 ▶ 翻页,
+  命中与存档/读档按全局槽位索引)
 * 存档内容: 变量 / 剧情位置 (标签+语句索引) / 调用栈 / 阻塞状态 /
   背景 (场景 id + 背景名) / 立绘 (id/立绘名/透明度/旋转/翻转/中心点) /
   BGM 注册名 / 当前样式名 / 文本与选择支状态
@@ -1406,6 +1416,7 @@ py -3.10 framework/tests/smoke.py
 | 48. 每帧钩子 | engine.register_frame_hook(fn) 主循环每帧无条件调用 (暂停菜单时也执行, 异常隔离), 为 Steam 回调 (RunCallbacks)/网络轮询/心跳提供语义化挂载点 (替代 draw_overlay 兼职) + 测试保持 779 项全绿 |
 | 49. 叙事扩展点 | engine.register_text_char_hook (文本输出钩子: 按逻辑字符增量触发, 打字音效/字幕高亮; instant/跳过一次大增量) + choice_prepare 事件 (选择支显示前广播, 插件可原地改写选项, 直播互动/动态选项) + engine.snapshot_state/restore_state (内存状态快照, 与存档同构, 撤销/回滚/分支探索, 静默不落盘) + 测试保持 779 项全绿 |
 | 50. 槽位可配置 | window 块 save_slots 配置存档槽位数量 (默认 6; save.slot_count + list_slots 缺省跟随, 槽位界面按配置数量显示) + 移除"槽位固定 6 个"限制 + 测试增至 781 项全绿 |
+| 51. UI 与字体增强 | 槽位界面自动分页 (每页 6 槽, ◀ 页码 ▶ 翻页, 全局索引命中) + 鉴赏插件分页 (cg/bgm/角色/场景 按分类分页, page_image 翻页按钮图) + 内核 UI 图片键补全 (error_panel/error_button/notice_panel, ui 块通用解析 + set_theme_image 运行时 API) + **多字体系统** (font 指令/engine.register_font 注册命名字体, style 块 font: 键, get_font(family=) 取用, 富文本/名字框/选择支/标题跟随样式字体) + 测试保持 781 项全绿 |
 
 ---
 
