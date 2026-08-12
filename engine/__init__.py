@@ -15,6 +15,7 @@ class _Log:
     VERBOSE = False
     _file = None
     _warn_cbs = []
+    _msg_cbs = []
     _i18n = None
 
     def set_i18n(self, i18n):
@@ -65,6 +66,15 @@ class _Log:
             self._warn_cbs.append(fn)
         return fn
 
+    def on_message(self, fn):
+        """注册日志回调 fn(level, line); 每条日志都调用。
+
+        供调试服务器/外部工具实时转发日志 (不替代原有输出)。
+        """
+        if fn not in self._msg_cbs:
+            self._msg_cbs.append(fn)
+        return fn
+
     def _emit(self, level, msg):
         line = self._fmt(level, msg)
         print(line)
@@ -72,6 +82,11 @@ class _Log:
             try:
                 self._file.write(line + "\n")
                 self._file.flush()
+            except Exception:
+                pass
+        for cb in list(self._msg_cbs):
+            try:
+                cb(level, line)
             except Exception:
                 pass
         if level == "WARN":
