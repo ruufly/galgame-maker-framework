@@ -808,11 +808,17 @@ class Runtime:
         # 角色立绘: show <角色id> [立绘名] [at pos] [with effect]
         if sid in self.characters:
             char = self.characters[sid]
-            pose = None
-            for a in args:
-                if a not in ("at", "with") and pos is None and "effect" not in props:
-                    pose = a
-                    break
+            # 去掉 at/with 关键字及其参数后, 剩余第一个参数即立绘名
+            # (带 with 效果时不能再把效果名误当作姿态)
+            cleaned = []
+            i = 0
+            while i < len(args):
+                if args[i] in ("at", "with"):
+                    i += 2          # 跳过关键字与后面的值
+                else:
+                    cleaned.append(args[i])
+                    i += 1
+            pose = cleaned[0] if cleaned else None
             if pose is None:
                 pose = char.get("default")
             img = char["sprites"].get(pose) or char.get("default")
@@ -1337,6 +1343,33 @@ class Runtime:
         self.engine.emit("menu_button_added", name=mid, text=str(text))
         log.i("log.runtime.menu_button_added", mid=mid, name=item["name"])
         return item
+
+    def remove_menu_button(self, mid: str, key) -> bool:
+        """插件 API: 从命名菜单移除按钮 (key=按钮名/文本/索引)。
+
+        只应移除本插件添加的按钮 (勿移除脚本定义的按钮)。
+        """
+        menu = self.menus.get(mid)
+        if isinstance(menu, dict):
+            items = menu.get("items", [])
+        elif isinstance(menu, list):
+            items = menu
+        else:
+            return False
+        idx = None
+        if isinstance(key, int):
+            idx = key
+        else:
+            key_s = str(key)
+            for i, it in enumerate(items):
+                if it.get("name") == key_s or str(it.get("text")) == key_s:
+                    idx = i
+                    break
+        if idx is None or not (0 <= idx < len(items)):
+            return False
+        items.pop(idx)
+        self.engine.emit("menu_button_removed", name=mid)
+        return True
 
     def set_menu_button_state(self, mid: str, key, enabled: bool) -> bool:
         """设置菜单按钮启用/禁用状态。
@@ -1872,11 +1905,21 @@ class Runtime:
         translated = re.sub(
             r"\$(" + self._NS_RE + r")",
             r"__vars__['\1']", expr)
-        # 安全检查: 禁止函数调用与魔法属性 (__vars__ 为内部合法名)
-        if re.search(r"[A-Za-z_\u4e00-\u9fff]\s*\(", translated):
-            raise RuntimeError_(f"表达式不允许函数调用: {expr!r}")
-        if re.search(r"\b__(?!vars__)\w+__\b", translated):
-            raise RuntimeError_(f"表达式包含非法符号: {expr!r}")
+        # 安全检查: 用 AST 遍历精确拒绝函数调用 / 属性访问 / 魔法名,
+        # 不再用正则 (字符串字面量里的括号/点号不应被误伤)
+        import ast as _ast
+        try:
+            tree = _ast.parse(translated, mode="eval")
+        except SyntaxError as exc:
+            raise RuntimeError_(f"表达式语法错误 {expr!r}: {exc}")
+        for node in _ast.walk(tree):
+            if isinstance(node, (_ast.Call, _ast.Attribute)):
+                raise RuntimeError_(
+                    f"表达式不允许函数调用/属性访问: {expr!r}")
+            if (isinstance(node, _ast.Name)
+                    and node.id.startswith("__")
+                    and node.id != "__vars__"):
+                raise RuntimeError_(f"表达式包含非法符号: {expr!r}")
         ns = dict(self.vars)
         # 命名空间别名: main::x -> x; builtin:: 域合并
         for k in list(self.vars):

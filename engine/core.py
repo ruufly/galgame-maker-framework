@@ -1062,6 +1062,10 @@ class GameEngine:
         self.actions[name] = handler
         log.i("log.core.action_registered", name=name)
 
+    def unregister_action(self, name: str) -> None:
+        """注销自定义动作 (插件卸载时调用, 保证零残留)。"""
+        self.actions.pop(name, None)
+
     def run_action(self, action, source: str = None) -> bool:
         """执行一个动作 dict {"type": ..., 其他参数}, 返回是否已处理。"""
         if not isinstance(action, dict) or not action.get("type"):
@@ -1331,6 +1335,13 @@ class GameEngine:
         return self.runtime.add_menu_button(menu_id, text, action, cfg,
                                             index)
 
+    def remove_menu_button(self, menu_id: str, key) -> bool:
+        """插件 API: 从命名菜单移除按钮 (key=按钮名/文本/索引)。
+
+        只应移除本插件添加的按钮 (勿移除脚本定义的按钮)。
+        """
+        return self.runtime.remove_menu_button(menu_id, key)
+
     def set_menu_button_state(self, menu_id: str, key, enabled: bool) -> bool:
         """插件 API: 设置菜单按钮启用/禁用 (key=按钮名或文本或索引)。"""
         ok = self.runtime.set_menu_button_state(menu_id, key, enabled)
@@ -1350,6 +1361,12 @@ class GameEngine:
 
     def _play_ui_sound(self, kind: str = "click") -> None:
         """播放 UI 交互音效 (click=按下 / hover=活动项变化)。"""
+        name = self.ui_hover_sound if kind == "hover" else self.ui_click_sound
+        if not name:
+            return
+        path = self.runtime.resolve_sound(name)
+        if path:
+            self.audio.play_sound(path)
 
     # ==================================================================
     # 文件编解码钩子 (插件加密存档/资源/语言/脚本/插件文件用)
@@ -1396,12 +1413,6 @@ class GameEngine:
                 log.w("log.core.codec_failed", scope=scope, dir_="encode",
                       exc=exc)
         return data
-        name = self.ui_hover_sound if kind == "hover" else self.ui_click_sound
-        if not name:
-            return
-        path = self.runtime.resolve_sound(name)
-        if path:
-            self.audio.play_sound(path)
 
     def _set_ui_sounds(self, ui_cfg: dict = None) -> None:
         """应用菜单/选择支的 UI 音效配置 (临时覆盖 window 默认)。

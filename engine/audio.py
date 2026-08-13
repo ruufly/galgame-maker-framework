@@ -165,15 +165,6 @@ class Audio:
         self.stop_all_sfx()
         self.engine.emit("sound_all_stop")
 
-    def set_bgm_volume(self, vol: float) -> None:
-        self.bgm_volume = max(0.0, min(1.0, vol))
-        if self.mixer_ok:
-            try:
-                import pygame
-                pygame.mixer.music.set_volume(self.bgm_volume)
-            except Exception:
-                pass
-
     def update(self, dt: float) -> None:
         """每帧推进 BGM 淡入淡出 (音量渐变)。"""
         if not self.mixer_ok or self._fade is None:

@@ -56,6 +56,7 @@ class SettingsManager:
         self._drag_rect = None   # 拖动中的滑条条目 rect
         self._hover = -1         # 当前悬停条目索引
         self._img_cache = {}
+        self._dynamic_cache = {} # 动态项缓存 (voice:<角色id>, 保证覆盖生效)
 
         self._register_builtins()
         # 设置加载统一由 read_settings 指令 / 显式 load() 完成:
@@ -230,8 +231,12 @@ class SettingsManager:
             self.engine._rebuild_window()
 
     def _resolve_item(self, key):
-        """动态项: voice:<角色id> 的角色语音音量。"""
+        """动态项: voice:<角色id> 的角色语音音量。结果缓存 (setting.gal
+        对 label/section 的覆盖要能持久生效)。"""
         if key.startswith(self._DYNAMIC_PREFIX):
+            cached = self._dynamic_cache.get(key)
+            if cached is not None:
+                return cached
             cid = key[len(self._DYNAMIC_PREFIX):]
             rt = self.engine.runtime
 
@@ -251,11 +256,13 @@ class SettingsManager:
             name = self.engine.i18n.resolve(str(ch.get("name") or cid))
             label = self.engine.i18n.t("settings.voice_char", name=name,
                                        default=f"{name} 语音")
-            return {"key": key, "label": label, "kind": "slider",
+            item = {"key": key, "label": label, "kind": "slider",
                     "getter": getter, "setter": setter,
                     "min": 0.0, "max": 1.0, "step": 0.05,
                     "options": None, "visible": True, "on_click": None,
                     "section": "语音"}   # 各角色语音默认归并到"语音"栏
+            self._dynamic_cache[key] = item
+            return item
         return None
 
     def _get_item(self, key):
@@ -300,6 +307,15 @@ class SettingsManager:
                 data[key] = item["getter"]()
             except Exception:
                 pass
+        # 动态项 (voice:<角色id>): 已存在角色的语音音量一并保存
+        # (设置界面可直接调节, 不必依赖 setting.gal 显式引用)
+        for key, item in self._dynamic_cache.items():
+            if item.get("getter") is None:
+                continue
+            try:
+                data[key] = item["getter"]()
+            except Exception:
+                pass
         self.engine.save.set_settings(data)
 
     def load(self, apply_defaults=True) -> None:
@@ -323,6 +339,15 @@ class SettingsManager:
                     item["setter"](item["_default"])
                 except Exception:
                     pass
+        # 动态项 (voice:<角色id>): 从设置文件恢复角色语音音量
+        for key, value in data.items():
+            if key.startswith(self._DYNAMIC_PREFIX):
+                item = self._get_item(key)
+                if item and item.get("setter") is not None:
+                    try:
+                        item["setter"](value)
+                    except Exception:
+                        pass
 
     def get(self, key, default=None):
         """插件 API: 读取设置值。"""
