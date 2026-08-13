@@ -66,5 +66,10 @@ class DebugModePlugin(Plugin):
         return True
 
     def on_unload(self):
+        # 零残留: 注销快捷键 (连同自动生成的设置项)
+        try:
+            self.engine.keybinds.unregister("debug_toggle")
+        except Exception:
+            pass
         from framework.engine import log
         log.i("log.plugin.unloaded", name=self.name)

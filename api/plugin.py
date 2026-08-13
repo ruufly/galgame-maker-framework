@@ -82,7 +82,7 @@ class Plugin:
         """实例方法版事件订阅, 返回装饰器。"""
         def deco(fn):
             self.engine.events.on(event_name, fn)
-            self._event_handlers.append(fn)
+            self._event_handlers.append((event_name, fn))
             return fn
         return deco
 
@@ -103,15 +103,13 @@ class Plugin:
             except Exception:
                 pass
         self._command_handlers.clear()
-        for fn in self._event_handlers:
-            # 取消订阅 (按函数对象移除)
-            for ev in list(self.engine.events.names()):
+        for ev, fn in list(self._event_handlers):
+            # 取消订阅 (按保存的 (事件名, 函数) 精确移除, 不遍历全表)
+            try:
                 self.engine.events.off(ev, fn)
-        for name, fn in list(self._command_handlers):
-            if self.engine.commands.has(name):
-                self.engine.commands.unregister(name)
+            except Exception:
+                pass
         self._event_handlers.clear()
-        self._command_handlers.clear()
 
 
 class PluginManager:
@@ -124,6 +122,7 @@ class PluginManager:
         self._modules = {}   # name -> module
         self._classes = {}   # name -> Plugin 类
         self._mod_regs = {}  # 模块级装饰器注册追踪: name -> {commands, events}
+        self._inst_regs = {}  # 实例级装饰器注册追踪: id(inst) -> {commands, events}
 
     # ------------------------------------------------------------------
     def discover(self, directory: str, config: dict = None) -> List[str]:
@@ -200,6 +199,7 @@ class PluginManager:
     def load(self, module) -> Optional[Plugin]:
         """加载一个已导入的模块 (或其内的 Plugin 子类)。"""
         if inspect.ismodule(module):
+            mod_name = getattr(module, "__name__", None)
             self._register_from_module(module, mod_name)
             return None
         return self._instantiate(module)
@@ -210,30 +210,49 @@ class PluginManager:
         for attr_name in dir(module):
             obj = getattr(module, attr_name)
             if inspect.isclass(obj) and issubclass(obj, Plugin) and obj is not Plugin:
-                self._instantiate(obj)
+                self._instantiate(obj, mod_name)
                 continue
             if inspect.isfunction(obj):
                 self._register_function(obj, mod_name)
 
-    def _register_function(self, fn, mod_name: str = None) -> None:
+    def _register_function(self, fn, mod_name: str = None,
+                           inst: Plugin = None) -> None:
+        """注册装饰器标记的函数 (事件/指令)。
+
+        inst 非空时是类形式插件的实例方法: 命名空间取所属插件名,
+        注册追踪挂在实例上 (卸载时精确清理, 不污染 main:: 域)。
+        """
         ev = getattr(fn, _EVENT_ATTR, None)
+        cmd = getattr(fn, _COMMAND_ATTR, None)
         if ev is not None:
             self.engine.events.on(ev, fn)
-            if mod_name:
+            if inst is not None:
+                self._inst_regs.setdefault(id(inst), {"commands": [],
+                                                      "events": []})
+                self._inst_regs[id(inst)]["events"].append((ev, fn))
+            elif mod_name:
                 self._mod_regs.setdefault(mod_name, {"commands": [],
                                                      "events": []})
                 self._mod_regs[mod_name]["events"].append((ev, fn))
-        cmd = getattr(fn, _COMMAND_ATTR, None)
         if cmd is not None:
-            # 插件命名空间 = 插件文件名 (gm_plugin_shake -> shake)
-            ns = (mod_name or "main").replace("gm_plugin_", "")
+            # 插件命名空间 = 插件文件名 (gm_plugin_shake -> shake);
+            # 类形式插件: 所属模块名, 无模块时用类名/插件名
+            if inst is not None:
+                ns = (mod_name or getattr(inst, "name", None)
+                      or type(inst).__name__).replace("gm_plugin_", "")
+            else:
+                ns = (mod_name or "main").replace("gm_plugin_", "")
             self.engine.commands.register(cmd, fn, ns=ns)
-            if mod_name:
+            if inst is not None:
+                self._inst_regs.setdefault(id(inst), {"commands": [],
+                                                      "events": []})
+                self._inst_regs[id(inst)]["commands"].append((cmd, ns))
+            elif mod_name:
                 self._mod_regs.setdefault(mod_name, {"commands": [],
                                                      "events": []})
                 self._mod_regs[mod_name]["commands"].append(cmd)
 
-    def _instantiate(self, cls) -> Optional[Plugin]:
+    def _instantiate(self, cls, mod_name: str = None) -> Optional[Plugin]:
         try:
             inst = cls(self.engine)
         except Exception as exc:
@@ -243,11 +262,12 @@ class PluginManager:
         if not isinstance(inst, Plugin):
             return None
         inst.on_load()
-        # 重新扫描实例方法上的装饰器标记 (类形式插件也支持装饰器)
+        # 重新扫描实例方法上的装饰器标记 (类形式插件也支持装饰器;
+        # 命名空间 = 所属插件名, 注册进实例级追踪以便卸载)
         for name in dir(inst):
             obj = getattr(inst, name)
             if callable(obj) and not name.startswith("__"):
-                self._register_function(obj)
+                self._register_function(obj, mod_name=mod_name, inst=inst)
         self.plugins.append(inst)
         self._classes[inst.name] = inst
         from framework.engine import log
@@ -262,6 +282,13 @@ class PluginManager:
             from framework.engine import log
             log.w("log.plugin.unload_failed", name=plugin.name, exc=exc)
         plugin._cleanup()
+        # 清理实例级装饰器注册 (类形式插件的 @command/@event_listener)
+        regs = self._inst_regs.pop(id(plugin), None)
+        if regs:
+            for cmd_name, ns in regs.get("commands", []):
+                self.engine.commands.unregister(cmd_name, ns=ns)
+            for ev, fn in regs.get("events", []):
+                self.engine.events.off(ev, fn)
         if plugin in self.plugins:
             self.plugins.remove(plugin)
         self._classes.pop(plugin.name, None)
@@ -285,6 +312,9 @@ class PluginManager:
             for ev, fn in regs.get("events", []):
                 self.engine.events.off(ev, fn)
         self._modules.pop(mod_name, None)
+        # 清理 sys.modules 残留, 避免重载同名插件时读到旧模块状态
+        import sys as _sys
+        _sys.modules.pop(mod_name, None)
 
     def unload_all(self) -> None:
         for plugin in list(self.plugins):

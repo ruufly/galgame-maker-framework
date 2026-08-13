@@ -175,3 +175,16 @@ class TransitionPlugin(Plugin):
             self.engine.display.register_transition(cls.name, cls)
         from framework.engine import log
         log.i("log.plugin.loaded", name=self.name, version=self.version)
+
+    def on_unload(self):
+        # 零残留: 注销全部扩展过渡
+        try:
+            d = self.engine.display
+            for cls in (WipeTransition, IrisTransition, CurtainTransition,
+                        SweepTransition, FadeWhiteTransition,
+                        CheckerTransition, StripesTransition):
+                d.unregister_transition(cls.name)
+        except Exception:
+            pass
+        from framework.engine import log
+        log.i("log.plugin.unloaded", name=self.name)

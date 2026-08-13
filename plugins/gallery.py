@@ -131,6 +131,12 @@ class GalleryPlugin(Plugin):
     def on_unload(self):
         self.engine.actions.pop("gallery_open", None)
         self._img_cache.clear()
+        # 零残留: 移除本插件自动添加的标题菜单按钮 (name=gallery 标记;
+        # 脚本自定义的鉴赏按钮保留)
+        try:
+            self.engine.remove_menu_button("title", "gallery")
+        except Exception:
+            pass
         from framework.engine import log
         log.i("log.plugin.unloaded", name=self.name)
 

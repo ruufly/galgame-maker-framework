@@ -113,6 +113,26 @@ class KeyBindManager:
                 out.append(other)
         return out
 
+    def unregister(self, name: str) -> None:
+        """注销快捷键 (插件卸载时调用): 移除绑定、顺序与自动生成的设置项。
+
+        保证"卸载插件后快捷键零残留" (设置界面不再显示、按键不再触发)。
+        """
+        self.bindings.pop(name, None)
+        if name in self._order:
+            self._order.remove(name)
+        # 同步移除自动生成的设置项 (keybind 类型)
+        try:
+            s = self.engine.settings
+            s.items.pop(name, None)
+            if name in s.order:
+                s.order.remove(name)
+            if name in s._dynamic_cache:
+                s._dynamic_cache.pop(name, None)
+        except Exception:
+            pass
+        self.engine.emit("keybind_unregister", name=name)
+
     # ------------------------------------------------------------------
     # 按键分发
     # ------------------------------------------------------------------

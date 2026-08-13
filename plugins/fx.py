@@ -132,5 +132,10 @@ class FxPlugin(Plugin):
 
     def on_unload(self):
         self._fx = None
+        # 零残留: 注销特效覆盖层 (卸载后不再参与绘制)
+        try:
+            self.engine.display.unregister_effect_overlay(self._overlay)
+        except Exception:
+            pass
         from framework.engine import log
         log.i("log.plugin.unloaded", name=self.name)

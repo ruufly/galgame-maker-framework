@@ -957,6 +957,26 @@ class Display:
         self.sprite_effect_durations[name] = duration
         log.i("log.display.sprite_effect_registered", name=name)
 
+    def unregister_sprite_effect(self, name: str) -> None:
+        """注销自定义立绘效果 (插件卸载时调用, 保证零残留)。"""
+        self.sprite_effects.pop(name, None)
+        self.sprite_effect_durations.pop(name, None)
+
+    def unregister_text_mode(self, name: str) -> None:
+        """注销自定义文字显示模式 (插件卸载时调用)。"""
+        self.text_modes.pop(name, None)
+        if self.text_mode == name:
+            self.text_mode = "typewriter"
+
+    def unregister_transition(self, name: str) -> None:
+        """注销自定义背景过渡 (插件卸载时调用)。"""
+        self.transitions.pop(name, None)
+
+    def unregister_effect_overlay(self, fn) -> None:
+        """注销全屏特效覆盖层 (插件卸载时调用)。"""
+        if fn in self._effect_overlays:
+            self._effect_overlays.remove(fn)
+
     def set_text_mode(self, name: str) -> bool:
         """切换对话框文字显示模式 (typing 指令)。"""
         if name not in self.text_modes:

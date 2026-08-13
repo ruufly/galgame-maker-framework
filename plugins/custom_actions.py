@@ -215,6 +215,22 @@ class CustomActionsPlugin(Plugin):
 
     def on_unload(self):
         self._fx = None
+        # 零残留: 注销动作 / 立绘效果 / 文字模式 / 特效覆盖层
+        try:
+            for n in ("explode", "quake", "freeze", "blackout"):
+                self.engine.unregister_action(n)
+        except Exception:
+            pass
+        try:
+            d = self.engine.display
+            for n in ("wobble", "sway", "zoom_bounce", "fade_rotate",
+                      "float", "squash"):
+                d.unregister_sprite_effect(n)
+            for n in ("wave", "bounce", "speedup", "rainbow", "shiver"):
+                d.unregister_text_mode(n)
+            d.unregister_effect_overlay(self._overlay)
+        except Exception:
+            pass
         from framework.engine import log
         log.i("log.plugin.unloaded", name=self.name)
 
